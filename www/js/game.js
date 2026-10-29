@@ -1,5 +1,5 @@
 // Core simulation: pet state, per-minute ticking, care actions and evolution.
-import { STAGE_TIME, BASE_WEIGHT, SPECIES, SPECIES_BY_ID, FAMILIES, COUNTER_KEYS } from './data.js';
+import { stageLength, BASE_WEIGHT, SPECIES, SPECIES_BY_ID, FAMILIES, COUNTER_KEYS } from './data.js';
 import { clamp, rand, pick } from './util.js';
 
 const SAVE_KEY = 'mythpals.save.v1';
@@ -9,7 +9,7 @@ const emptyCounters = () => Object.fromEntries(COUNTER_KEYS.map((k) => [k, 0]));
 export function newPet(family, name) {
   return {
     name: name || 'Mochi', family, species: null, stage: 0, variant: 'normal',
-    age: 0, stageAge: 0,
+    age: 0, stageAge: 0, stageProgress: 0,
     hunger: 70, happy: 70, energy: 100, hygiene: 100, health: 100, discipline: 10, bond: 5, weight: BASE_WEIGHT[0],
     power: 0, magic: 0, agility: 0,
     asleep: false, lightsOn: true, sick: false, poops: 0, poopTimer: 60,
@@ -22,7 +22,7 @@ export function newPet(family, name) {
 
 export function newState() {
   return {
-    v: 1, lastReal: Date.now(), speed: 4, gentle: true, sound: true, vibrate: true, previewAll: false,
+    v: 1, lastReal: Date.now(), speed: 4, growth: 4, gentle: true, sound: true, vibrate: true, previewAll: false,
     coins: 40, generation: 1, pet: null,
     unlocked: {}, dex: {}, legends: [],
     inventory: { cake: 1, fav: 0, ball: 0, salts: 0, vitamin: 0 },
@@ -34,7 +34,11 @@ export function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s && s.v === 1) return Object.assign(newState(), s);
+      if (s && s.v === 1) {
+        if (s.growth === undefined) s.growth = s.speed; // saves from before growth/needs pacing split
+        if (s.pet && s.pet.stageProgress === undefined) s.pet.stageProgress = Math.min(1, s.pet.stageAge / stageLength(s.pet.stage, s.speed, s.growth));
+        return Object.assign(newState(), s);
+      }
     }
   } catch (e) { /* ignore corrupt or unavailable storage */ }
   return newState();
@@ -51,6 +55,13 @@ export function wipe() {
 export const species = (pet) => (pet && pet.species ? SPECIES_BY_ID[pet.species] : null);
 
 export function maxWeight(pet) { return BASE_WEIGHT[pet.stage] * 1.6; }
+
+// Real-world minutes until the next stage.
+export function minutesToNextStage(state) {
+  const p = state.pet;
+  if (!p || p.stage >= 4) return 0;
+  return (Math.max(0, 1 - p.stageProgress) * stageLength(p.stage, state.speed, state.growth)) / state.speed;
+}
 
 export function unlockKey(pet) {
   if (pet.stage === 1) return `wisp:${pet.family}`;
@@ -76,9 +87,10 @@ function stepMinute(state, ev, offline) {
   if (!p || !p.alive) return;
   p.age += 1;
   p.stageAge += 1;
+  if (p.stage < 4) p.stageProgress += 1 / stageLength(p.stage, state.speed, state.growth);
 
   if (p.stage === 0) {
-    if (p.stageAge >= STAGE_TIME[0]) evolve(state, ev);
+    if (p.stageProgress >= 1) evolve(state, ev);
     return;
   }
 
@@ -157,7 +169,7 @@ function stepMinute(state, ev, offline) {
   p.care.sum += (p.hunger + p.happy + p.hygiene + p.health) / 4;
   p.care.n += 1;
 
-  if (p.stage < 4 && p.stageAge >= STAGE_TIME[p.stage] && !p.asleep) evolve(state, ev);
+  if (p.stage < 4 && p.stageProgress >= 1 && !p.asleep) evolve(state, ev);
 
   if (p.health <= 0) {
     if (state.gentle) {
@@ -208,6 +220,7 @@ function evolve(state, ev) {
     p.variant = careGrade(p);
   }
   p.stageAge = 0;
+  p.stageProgress = 0;
   p.mistakes = 0;
   p.care = { sum: 0, n: 0 };
   p.counters = emptyCounters();

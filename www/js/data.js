@@ -2,15 +2,31 @@
 
 // Game-minutes needed in each stage before evolving (egg, wisp, rookie, champion).
 export const STAGE_TIME = [2, 45, 720, 2880];
-export const STAGE_NAMES = ['Egg', 'Wisp', 'Rookie', 'Champion', 'Ultimate'];
+export const STAGE_NAMES = ['Egg', 'Wisp', 'Spark', 'Bloom', 'Legend'];
 export const BASE_WEIGHT = [3, 5, 15, 30, 45];
 
-export const SPEEDS = [
-  { id: 1, label: 'Relaxed (real time)' },
-  { id: 4, label: 'Brisk (4x)' },
-  { id: 12, label: 'Fast (12x)' },
-  { id: 60, label: 'Hyper (60x)' },
+// Pacing is split in two so players can grow a pet quickly without frantic care (or the reverse).
+// Growth: how fast she moves through the stages. Total time from egg to Legend at 1x is ~61 hours.
+export const GROWTH_SPEEDS = [
+  { id: 1, label: 'Patient (real time)', hint: 'about 2½ days to Legend' },
+  { id: 4, label: 'Steady (4×)', hint: 'about 15 hours to Legend' },
+  { id: 12, label: 'Quick (12×)', hint: 'about 5 hours to Legend' },
+  { id: 60, label: 'Speedy (60×)', hint: 'about 1 hour to Legend' },
+  { id: 180, label: 'Whirlwind (180×)', hint: 'about 20 minutes to Legend' },
 ];
+// Needs: how fast hunger, mood, energy and messes change.
+export const NEEDS_SPEEDS = [
+  { id: 1, label: 'Chill (1×)', hint: 'check in every few hours' },
+  { id: 2, label: 'Easygoing (2×)', hint: 'check in every hour or two' },
+  { id: 4, label: 'Lively (4×)', hint: 'check in about once an hour' },
+  { id: 10, label: 'Busy (10×)', hint: 'check in every 15–20 minutes' },
+];
+
+// Game-minute length of a stage for the current pacing (stage age is counted in game minutes,
+// which tick at the needs speed).
+export function stageLength(stage, needs, growth) {
+  return Math.max(1, Math.round((STAGE_TIME[stage] * needs) / growth));
+}
 
 export const VARIANTS = {
   normal: { prefix: '', label: 'Normal' },

@@ -1,7 +1,8 @@
 // Anime-style CG portraits rendered as layered SVG, built from the same species parameters
-// as the pixel sprites. One CG per species x stage (Rookie/Champion/Ultimate) x variant.
+// as the pixel sprites. One CG per species x stage (Spark/Bloom/Legend) x variant.
 import { FAMILIES, SPECIES_BY_ID, VARIANTS, STAGE_NAMES } from './data.js';
 import { palette } from './sprites.js';
+import { CG_IMAGES } from '../art/registry.js';
 import { shade, mix, seeded, escapeHtml } from './util.js';
 
 const W = 400, H = 560, CX = 200;
@@ -10,6 +11,29 @@ let uid = 0;
 export function speciesTitle(sp, stage, variant) {
   if (stage < 2) return stage === 0 ? 'Egg' : 'Wisp';
   return (VARIANTS[variant]?.prefix || '') + sp.names[stage - 2];
+}
+
+// One CG for display: a hand-made image when one is registered in art/registry.js, otherwise the
+// procedural SVG. Returns { html, href, file } where html is an element with class "cg-frame".
+export function cgView({ species, family, stage, variant = 'normal' }, opts = {}) {
+  const style = opts.style ? ` style="${opts.style}"` : '';
+  const imgs = species ? CG_IMAGES[species] : null;
+  const src = imgs && (imgs[`${stage}-${variant}`] || imgs[stage]);
+  if (src) {
+    const sp = SPECIES_BY_ID[species];
+    const title = speciesTitle(sp, stage, variant);
+    const tinted = !imgs[`${stage}-${variant}`] && variant !== 'normal' ? ` cg-${variant}` : '';
+    const name = opts.name || title;
+    const sub = `${opts.name ? title + ' · ' : ''}${STAGE_NAMES[stage]} · ${FAMILIES[sp.fam].name}`;
+    return {
+      html: `<div class="cg-frame cg-art${tinted}${stage === 4 ? ' cg-legend' : ''}"${style}><img src="${src}" alt="${escapeHtml(title)}" loading="lazy">`
+        + `<div class="cg-plate"><b>${escapeHtml(name)}</b><span>${escapeHtml(sub)}</span></div></div>`,
+      href: src, file: src.split('/').pop(),
+    };
+  }
+  const svg = stage === 1 ? makeWispCG(family, opts) : makeCG(species, stage, variant, opts);
+  const url = cgDataUrl(svg);
+  return { html: `<img class="cg-frame"${style} src="${url}" alt="CG" loading="lazy">`, href: url, file: 'mythpals-cg.svg' };
 }
 
 export function cgDataUrl(svg) {

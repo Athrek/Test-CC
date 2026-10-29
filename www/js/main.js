@@ -1,8 +1,8 @@
 // App bootstrap, main room rendering loop, menus and screens.
 import * as G from './game.js';
-import { FAMILIES, SPECIES, SPECIES_BY_ID, STAGE_NAMES, STAGE_TIME, SPEEDS, SHOP, VARIANTS, speciesHint } from './data.js';
-import { petSprite, drawEgg, drawChibi, drawWisp, roomCanvas, ICONS, ROOM_W, ROOM_H, PET_GROUND } from './sprites.js';
-import { makeCG, makeWispCG, cgDataUrl, speciesTitle } from './cg.js';
+import { FAMILIES, SPECIES, SPECIES_BY_ID, STAGE_NAMES, GROWTH_SPEEDS, NEEDS_SPEEDS, SHOP, VARIANTS, speciesHint } from './data.js';
+import { petSprite, blitSprite, speciesSprite, drawEgg, drawWisp, roomCanvas, ICONS, ROOM_W, ROOM_H, PET_GROUND } from './sprites.js';
+import { cgView, speciesTitle } from './cg.js';
 import { sfx, setSound } from './audio.js';
 import * as MG from './minigames.js';
 import { escapeHtml, formatAge, clamp, rand } from './util.js';
@@ -142,7 +142,7 @@ function drawRoom(t) {
   else if (animating && view.anim === 'happy') bob = -Math.abs(Math.round(Math.sin(now / 120) * 4));
   else if (!pet.asleep && Math.abs(view.target - view.x) >= 1) bob = Math.floor(now / 200) % 2 ? -1 : 0;
 
-  const crack = pet.stage === 0 ? Math.floor((pet.stageAge / STAGE_TIME[0]) * 3) : 0;
+  const crack = pet.stage === 0 ? Math.floor(Math.min(1, pet.stageProgress) * 3) : 0;
   let cv = petSprite(pet, pose, { sp, crack });
   let dx = pet.stage === 0 ? 60 : view.x;
   if (pet.stage === 0 && (animating || now % 2400 < 300)) dx += Math.floor(now / 90) % 2 ? 1 : -1;
@@ -154,10 +154,7 @@ function drawRoom(t) {
   // shadow
   rctx.fillStyle = 'rgba(0,0,0,0.18)';
   rctx.fillRect(Math.round(dx) - 9, PET_GROUND, 18, 2);
-  if (view.dir < 0 && pet.stage > 0) {
-    rctx.translate(Math.round(dx), 0); rctx.scale(-1, 1);
-    rctx.drawImage(cv, -24, PET_GROUND - 47 + bob);
-  } else rctx.drawImage(cv, Math.round(dx) - 24, PET_GROUND - 47 + bob);
+  blitSprite(rctx, cv, dx, PET_GROUND + bob, view.dir < 0 && pet.stage > 0);
   rctx.restore();
 
   // food in front of her
@@ -396,7 +393,7 @@ function showTrain() {
     }),
   }));
   items.push({
-    icon: '⚔️', label: 'Spar Battle', desc: p.stage < 2 ? 'Available from the Rookie stage' : 'Fight a wild monster for coins',
+    icon: '⚔️', label: 'Spar Battle', desc: p.stage < 2 ? 'Available from the Spark stage' : 'Fight a wild monster for coins',
     disabled: p.stage < 2,
     run: () => startGame(MG.battle, (r) => {
       const coins = G.applyBattle(state, r.won);
@@ -433,8 +430,7 @@ function showShop() {
 // ---------------------------------------------------------------------------
 function cgFor(pet, opts = {}) {
   if (pet.stage === 0) return null;
-  if (pet.stage === 1) return makeWispCG(pet.family, opts);
-  return makeCG(pet.species, pet.stage, pet.variant, opts);
+  return cgView(pet, opts);
 }
 
 function showStatus() {
@@ -442,15 +438,15 @@ function showStatus() {
   const sp = spOf(p);
   const cg = cgFor(p, { name: p.name });
   const grade = p.stage >= 2 && p.stage < 4 ? G.careGrade(p) : null;
-  const next = p.stage < 4 ? Math.max(0, STAGE_TIME[p.stage] - p.stageAge) : 0;
+  const next = G.minutesToNextStage(state);
   const body = openModal(`
     <h2>${escapeHtml(p.name)}</h2>
-    ${cg ? `<img class="cg-frame" src="${cgDataUrl(cg)}" alt="CG">` : `<p class="center muted">Your egg is incubating. Keep it company!</p>`}
+    ${cg ? cg.html : `<p class="center muted">Your egg is incubating. Keep it company!</p>`}
     <div class="statgrid">
       <div><span>Stage</span><b>${STAGE_NAMES[p.stage]}</b></div>
       <div><span>Age</span><b>${formatAge(p.age)}</b></div>
       <div><span>Weight</span><b>${Math.round(p.weight)} kg</b></div>
-      <div><span>Next stage</span><b>${p.stage < 4 ? (p.asleep && next === 0 ? 'after nap' : formatAge(next)) : 'Max'}</b></div>
+      <div><span>Next stage</span><b>${p.stage < 4 ? (p.asleep && next < 1 ? 'after nap' : formatAge(next)) : 'Max'}</b></div>
       <div><span>💪 Power</span><b>${p.power}</b></div>
       <div><span>🔮 Magic</span><b>${p.magic}</b></div>
       <div><span>💨 Agility</span><b>${p.agility}</b></div>
@@ -485,9 +481,10 @@ function showStatus() {
 // ---------------------------------------------------------------------------
 const CG_SLOTS = [[2, 'normal'], [3, 'normal'], [3, 'radiant'], [3, 'shadow'], [4, 'normal'], [4, 'radiant'], [4, 'shadow']];
 
-function spriteThumb(sp) {
-  const cv = drawChibi(sp, 2, 'normal', {}).toCanvas();
-  return cv;
+function spriteThumb(sp, seen) {
+  const pb = speciesSprite(sp, 2, 'normal');
+  if (!seen) pb.fillAll('#3a2440');
+  return pb.toCanvas();
 }
 
 function showAlbum(tab) {
@@ -510,7 +507,8 @@ function showAlbum(tab) {
     for (const f of Object.keys(FAMILIES)) {
       const fig = document.createElement('figure');
       if (has(`wisp:${f}`)) {
-        const img = new Image(); img.src = cgDataUrl(makeWispCG(f)); img.onclick = () => showCG(makeWispCG(f)); fig.appendChild(img);
+        const v = cgView({ family: f, stage: 1 });
+        fig.innerHTML = v.html; fig.firstChild.onclick = () => showCG({ family: f, stage: 1 }, () => showAlbum('gallery'));
       } else fig.innerHTML = '<div class="lock">?</div>';
       fig.insertAdjacentHTML('beforeend', `<figcaption>${FAMILIES[f].name}</figcaption>`);
       wt.appendChild(fig);
@@ -522,9 +520,7 @@ function showAlbum(tab) {
         const n = CG_SLOTS.filter(([st, v]) => has(`${sp.id}:${st}:${v}`)).length;
         const seen = state.previewAll || state.dex[sp.id];
         const row = document.createElement('button'); row.className = 'sprow';
-        const thumb = spriteThumb(sp);
-        if (!seen) { const c = drawChibi(sp, 2, 'normal', {}); c.fillAll('#3a2440'); row.appendChild(c.toCanvas()); }
-        else row.appendChild(thumb);
+        row.appendChild(spriteThumb(sp, seen));
         row.insertAdjacentHTML('beforeend', `<div class="grow"><b>${seen ? sp.names[0] : '???'}</b><small>${n} / ${CG_SLOTS.length} CGs</small></div><span>›</span>`);
         const holder = document.createElement('div');
         row.onclick = () => {
@@ -533,9 +529,8 @@ function showAlbum(tab) {
           for (const [st, v] of CG_SLOTS) {
             const fig = document.createElement('figure');
             if (has(`${sp.id}:${st}:${v}`)) {
-              const svg = makeCG(sp.id, st, v);
-              const img = new Image(); img.src = cgDataUrl(svg); img.loading = 'lazy'; img.onclick = () => showCG(svg, () => showAlbum('gallery'));
-              fig.appendChild(img);
+              const who = { species: sp.id, stage: st, variant: v };
+              fig.innerHTML = cgView(who).html; fig.firstChild.onclick = () => showCG(who, () => showAlbum('gallery'));
             } else fig.innerHTML = '<div class="lock">?</div>';
             fig.insertAdjacentHTML('beforeend', `<figcaption>${STAGE_NAMES[st]}${v !== 'normal' ? ' · ' + VARIANTS[v].label : ''}</figcaption>`);
             th.appendChild(fig);
@@ -554,15 +549,14 @@ function showAlbum(tab) {
       for (const sp of SPECIES.filter((s) => s.fam === fam)) {
         const seen = state.previewAll || state.dex[sp.id];
         const row = document.createElement('div'); row.className = 'sprow';
-        const c = drawChibi(sp, 2, 'normal', {}); if (!seen) c.fillAll('#3a2440');
-        row.appendChild(c.toCanvas());
+        row.appendChild(spriteThumb(sp, seen));
         row.insertAdjacentHTML('beforeend', `<div class="grow"><b>${seen ? sp.names.join(' → ') : '???'}</b>
           <small>${seen ? escapeHtml(sp.desc) : ''}</small><small>🔑 Raise with ${speciesHint(sp)}${seen ? ` · 💝 ${sp.fav}` : ''}</small></div>`);
         list.appendChild(row);
       }
     }
   } else {
-    ab.innerHTML = state.legends.length ? '' : '<p class="muted">No legends yet. Raise a pet to the Ultimate stage and send her on a journey!</p>';
+    ab.innerHTML = state.legends.length ? '' : '<p class="muted">No legends yet. Raise a pet to the Legend stage and send her on a journey!</p>';
     for (const l of [...state.legends].reverse()) {
       const sp = SPECIES_BY_ID[l.species];
       ab.insertAdjacentHTML('beforeend', `<div class="legend"><b>Gen ${l.gen}: ${escapeHtml(l.name)}</b> — ${sp ? speciesTitle(sp, 4, l.variant) : 'Unknown'}<br>
@@ -571,9 +565,10 @@ function showAlbum(tab) {
   }
 }
 
-function showCG(svg, back) {
-  const body = openModal(`<img class="cg-frame" style="max-width:min(100%, 62vh)" src="${cgDataUrl(svg)}" alt="CG">
-    <div class="row" style="max-width:360px;margin:12px auto 0;width:100%"><a class="btn" download="mythpals-cg.svg" href="${cgDataUrl(svg)}">💾 Save</a><button class="btn primary" id="cgBack">Back</button></div>`, { full: true });
+function showCG(who, back) {
+  const v = cgView(who, { style: 'max-width:min(100%, 62vh)' });
+  const body = openModal(`${v.html}
+    <div class="row" style="max-width:360px;margin:12px auto 0;width:100%"><a class="btn" download="${v.file}" href="${v.href}">💾 Save</a><button class="btn primary" id="cgBack">Back</button></div>`, { full: true });
   body.querySelector('#cgBack').onclick = () => (back ? back() : closeModal());
 }
 
@@ -582,9 +577,9 @@ function showCG(svg, back) {
 // ---------------------------------------------------------------------------
 function showSettings() {
   const body = openModal(`<h2>Settings</h2>
-    <h3>Time speed</h3>
-    <select id="speed">${SPEEDS.map((s) => `<option value="${s.id}" ${s.id === state.speed ? 'selected' : ''}>${s.label}</option>`).join('')}</select>
-    <p class="muted">Faster speeds make her grow (and get hungry) faster. Relaxed is a true real-time V-pet.</p>
+    <h3>Pacing</h3>
+    ${pacingHtml()}
+    <p class="muted">Growth and needs are separate: you can raise a Legend in an hour without her getting hungry every few minutes, or keep a slow, real-time pet. Change these any time — her progress is kept.</p>
     <h3>Options</h3>
     <label class="row" style="align-items:center"><input type="checkbox" id="gentle" ${state.gentle ? 'checked' : ''}> Gentle mode (she never runs away; slower needs while the app is closed)</label>
     <label class="row" style="align-items:center"><input type="checkbox" id="sound" ${state.sound ? 'checked' : ''}> Sound effects</label>
@@ -593,12 +588,12 @@ function showSettings() {
     <h3>How to play</h3>
     <p class="muted">Feed, play, clean and put her to bed with the lights off. Ignoring a need for too long is a <b>care mistake</b>.
     During the <b>Wisp</b> stage, what you do most (meals, snacks, play, petting, training, discipline...) decides her species.
-    At the Champion and Ultimate stages, great care unlocks <b>Radiant</b> forms while neglect leads to <b>Dusk</b> forms.
+    At the Bloom and Legend stages, great care unlocks <b>Radiant</b> forms while neglect leads to <b>Dusk</b> forms.
     When she sometimes throws a tantrum for no reason, <b>Scold</b> her to build discipline. Each new stage unlocks a CG in your Album!</p>
     <h3>Data</h3>
     <button class="btn" id="reset" style="background:#ffd6d6">🗑️ Reset all progress</button>
     <p class="muted" style="margin-top:14px">MythPals v1.0 · Generation ${state.generation}</p>`);
-  body.querySelector('#speed').onchange = (e) => { state.speed = +e.target.value; G.save(state); };
+  bindPacing(body);
   body.querySelector('#gentle').onchange = (e) => { state.gentle = e.target.checked; G.save(state); };
   body.querySelector('#sound').onchange = (e) => { state.sound = e.target.checked; setSound(state.sound); G.save(state); };
   body.querySelector('#vibrate').onchange = (e) => { state.vibrate = e.target.checked; G.save(state); };
@@ -613,6 +608,17 @@ function showSettings() {
   };
 }
 
+function pacingHtml() {
+  const opts = (list, cur) => list.map((s) => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${s.label} — ${s.hint}</option>`).join('');
+  return `<label class="field"><span>🌱 Growth speed</span><select id="growth">${opts(GROWTH_SPEEDS, state.growth)}</select></label>
+    <label class="field"><span>🍙 Needs speed</span><select id="needs">${opts(NEEDS_SPEEDS, state.speed)}</select></label>`;
+}
+
+function bindPacing(body) {
+  body.querySelector('#growth').onchange = (e) => { state.growth = +e.target.value; G.save(state); renderHud(); };
+  body.querySelector('#needs').onchange = (e) => { state.speed = +e.target.value; G.save(state); };
+}
+
 // ---------------------------------------------------------------------------
 // Egg picker / evolution / departure
 // ---------------------------------------------------------------------------
@@ -623,8 +629,10 @@ function showEggPicker() {
     <p>Choose an egg to raise. Each egg holds a different family of monster girls — and how you raise her decides who she becomes.</p>
     <div class="eggs"></div>
     <p class="muted" id="eggHint"></p>
+    ${pacingHtml()}
     <input type="text" id="petNameIn" maxlength="16" placeholder="Name your pet" value="${['Mochi', 'Luna', 'Pip', 'Nyx', 'Clover', 'Saffy', 'Juniper', 'Maple'][Math.floor(Math.random() * 8)]}">
     <button class="btn primary block" id="adopt" style="margin-top:10px">🥚 Adopt this egg</button>`, { locked: true });
+  bindPacing(body);
   const wrap = body.querySelector('.eggs');
   eggs.forEach((f, i) => {
     const d = document.createElement('button'); d.className = 'egg';
@@ -677,7 +685,7 @@ function showEvolution(e) {
     const showNew = k >= 1 || Math.floor((t - t0) / period) % 2 === 1;
     const who = showNew ? p : fromPet;
     const spr = petSprite(who, showNew ? { eyes: 'happy', mouth: 'open', arms: 'up' } : {}, { sp: spOf(who), silhouette: k < 1 ? '#ffffff' : null });
-    ctx.drawImage(spr, 36, 74 - 47);
+    blitSprite(ctx, spr, 60, 74);
     if (k < 1.15) raf = requestAnimationFrame(draw);
     else reveal();
   };
@@ -685,11 +693,11 @@ function showEvolution(e) {
   modalCleanup = () => cancelAnimationFrame(raf);
   const reveal = () => {
     const title = p.stage === 1 ? `${FAMILIES[p.family].name} Wisp` : speciesTitle(toSp, p.stage, p.variant);
-    const cg = cgFor(p, { name: p.name });
+    const cg = cgFor(p, { name: p.name, style: 'max-width:min(100%, 30vh)' });
     sfx('happy');
     const out = body.querySelector('#evoOut');
     out.innerHTML = `<div class="evo-title">${escapeHtml(p.name)} became a ${escapeHtml(title)}!</div>
-      ${cg ? `<img class="cg-frame" style="max-width:min(100%, 30vh)" src="${cgDataUrl(cg)}" alt="CG">` : ''}
+      ${cg ? cg.html : ''}
       <p class="muted" style="color:#d9c8f0">${p.stage === 1 ? 'Raise her well — what you do most decides her species!' : p.stage === 2 ? escapeHtml(toSp.desc) : p.variant === 'radiant' ? 'Your loving care made her shine!' : p.variant === 'shadow' ? 'Neglect left a shadow on her heart...' : 'She grew strong and healthy!'} New CG added to your Album.</p>
       <button class="btn primary" id="evoOk" style="min-width:200px">Yay!</button>`;
     out.querySelector('#evoOk').onclick = () => { closeModal(true); setAnim('happy', 1500); burst(ICONS.star, 5); };

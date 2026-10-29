@@ -2,8 +2,8 @@
 
 A Tamagotchi / Digimon-style virtual pet where you hatch, raise and evolve fantasy monster girls:
 goblins, orcs, elves, minotaurs, ghosts, beastkin of all kinds, succubi, gorgons, lamias, sirens, harpies, dragons and more.
-Everything (the animated pixel sprites, the rooms and the anime-style CG portraits) is generated in code, so
-there are no image assets to manage. The game runs offline in any modern browser and is built for phones.
+Sprites and CGs come from two sources: hand-made art registered in `www/art/`, and procedural generators that cover every
+creature without hand-made art yet. The Goblin line has hand-made sprites; see [docs/ART_GUIDE.md](docs/ART_GUIDE.md) for adding more. The game runs offline in any modern browser and is built for phones.
 
 ## Playing on Android
 
@@ -44,21 +44,25 @@ Ignoring a need (hunger, mood, a messy room, sickness, lights) for too long coun
 
 ### Growth and evolution
 
-`Egg → Wisp → Rookie → Champion → Ultimate`
+`Egg → Wisp → Spark → Bloom → Legend`
 
 - **8 egg families:** Beastkin, Wildfolk, Sylvan, Spirit, Tidal, Skyborn, Infernal and Draconic.
 - **37 species.** During the Wisp stage, the care you give most often (meals, snacks, play, affection,
   each training type, discipline, rest, even neglect) decides which species of her family she becomes.
   The in-game **Codex** gives a hint for each species. For example, a Beastkin wisp who gets lots of Magic
   training becomes a Kitsune, and an Angel only appears for keepers who make no mistakes.
-- **Variants.** At Champion and Ultimate, great care (few mistakes, high bond) gives a **Radiant** form and
+- **Variants.** At Bloom and Legend, great care (few mistakes, high bond) gives a **Radiant** form and
   neglect gives a **Dusk** form. Each form has its own palette and CG.
 - Each new stage reaches the **Album** and unlocks an anime-style CG. That's 7 CGs per species plus 8 Wisp CGs.
-- Ultimate pets can be **sent on a journey**. They join the Hall of Legends and you get a new egg.
+- Legend pets can be **sent on a journey**. They join the Hall of Legends and you get a new egg.
 
 ### Settings
 
-- **Time speed:** Relaxed (true real time), Brisk 4× (the default), Fast 12× or Hyper 60×.
+- **Growth speed:** how fast she evolves. The options run from *Patient* (real time, about 2½ days to Legend)
+  to *Whirlwind* (180×, about 20 minutes).
+- **Needs speed:** how fast she gets hungry, bored, tired and messy, from *Chill* (1×) to *Busy* (10×).
+  The two are independent, so a pet can reach Legend quickly without needing care every few minutes.
+  Both can be set when you pick an egg and changed any time without losing her progress.
 - **Gentle mode** (on by default): your pet never runs away, and her needs drop at half speed while the app is closed.
 - **Preview all CGs:** shows every species and CG in the Album, for browsing the art.
 - Sound effects and vibration on alerts.
@@ -78,7 +82,10 @@ www/                 the game (static files, no build step)
   js/minigames.js    Which Way?, Treat Catch, training meter, spar battles
   js/main.js         UI, room animation loop, menus, album, evolution cutscenes
   js/audio.js        WebAudio chiptune sound effects
-tools/               dev pages: sprite sheet, CG browser, icon generator (serve from the repo root)
+  art/registry.js    hand-made art registry (sprites + image CGs); see docs/ART_GUIDE.md
+  art/sprites/       hand-made pixel sprites, one file per creature line
+  art/cg/            image CGs
+tools/               dev pages: sprite sheet, CG browser, hand-sprite preview, icon generator (serve from the repo root)
 capacitor.config.json, package.json   native Android packaging
 .github/workflows/android.yml         CI build of the debug APK
 ```

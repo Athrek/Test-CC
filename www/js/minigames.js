@@ -1,6 +1,6 @@
 // Mini-games. Each takes a container element plus helpers and calls `done(result)` when finished.
 // Each returns a cleanup function so the modal can stop timers when it closes.
-import { petSprite, ICONS } from './sprites.js';
+import { petSprite, blitSprite, ICONS } from './sprites.js';
 import { sfx } from './audio.js';
 import { SPECIES, SPECIES_BY_ID } from './data.js';
 import { speciesTitle } from './cg.js';
@@ -9,11 +9,7 @@ import { rand, pick } from './util.js';
 function spriteOpts(pet) { return { sp: pet.species ? SPECIES_BY_ID[pet.species] : null }; }
 
 function drawSprite(ctx, pet, pose, x, groundY, flip = false, opts = {}) {
-  const cv = petSprite(pet, pose, { ...spriteOpts(pet), ...opts });
-  ctx.save();
-  if (flip) { ctx.translate(Math.round(x), 0); ctx.scale(-1, 1); ctx.drawImage(cv, -24, groundY - 47); }
-  else ctx.drawImage(cv, Math.round(x) - 24, groundY - 47);
-  ctx.restore();
+  blitSprite(ctx, petSprite(pet, pose, { ...spriteOpts(pet), ...opts }), x, groundY, flip);
 }
 
 function makeCanvas(el, w, h) {

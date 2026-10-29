@@ -3,6 +3,7 @@
 import { PixelBuffer, bitmap } from './pixel.js';
 import { shade, mix, desaturate } from './util.js';
 import { FAMILIES } from './data.js';
+import { SPRITES } from '../art/registry.js';
 
 export const SPRITE = 48;
 const OUTLINE = '#2b2238';
@@ -529,6 +530,98 @@ export function drawWisp(fam, pose = {}) {
 // Cached sprite lookup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Hand-made sprites (art/sprites/*.js)
+// ---------------------------------------------------------------------------
+
+export const handSprite = (speciesId, stage) => (SPRITES[speciesId] && SPRITES[speciesId][stage]) || null;
+
+// Variant recolors are driven by each palette entry's role.
+function recolor(c, role, variant) {
+  if (variant === 'radiant') {
+    if (role === 'metal') return mix(c, '#fff3b0', 0.25);
+    if (['hair', 'cloth', 'accent', 'fur'].includes(role)) return shade(c, 0.12);
+    return c;
+  }
+  if (variant === 'shadow') {
+    switch (role) {
+      case 'skin': return mix(c, '#5b4a78', 0.28);
+      case 'eyes': case 'gem': return '#ff1744';
+      case 'line': return '#1a1024';
+      case 'white': return mix(c, '#b9a5d9', 0.4);
+      case 'metal': return mix(c, '#b388ff', 0.6);
+      case 'blush': return '#c26b9c';
+      default: return shade(desaturate(c, 0.45), -0.38);
+    }
+  }
+  return c;
+}
+
+// Renders a hand-made sprite definition with a pose (expression + breathing frame) and variant palette.
+export function drawHand(def, variant = 'normal', pose = {}) {
+  const rows = def.rows;
+  const h = rows.length, w = rows[0].length;
+  const pb = new PixelBuffer(w, h + 1); // +1 empty row so feet sit on the ground line like procedural sprites
+  const col = {};
+  for (const [ch, v] of Object.entries(def.palette)) {
+    const [c, role] = Array.isArray(v) ? v : [v, 'cloth'];
+    col[ch] = recolor(c, role, variant);
+  }
+  const lift = pose.flap && def.breath ? def.breath : 0; // rows above this line move down 1px on frame 2
+  const put = (from, to) => {
+    for (let y = from; y < to; y++) {
+      const r = rows[y];
+      for (let x = 0; x < w; x++) if (r[x] !== '.') pb.set(x, y + (y < lift ? 1 : 0), col[r[x]]);
+    }
+  };
+  put(lift, h);
+  put(0, lift);
+  const line = col[def.face.lash || 'k'] || OUTLINE;
+  pb.outline(variant === 'shadow' ? '#1a1024' : def.outline || OUTLINE);
+
+  const f = def.face;
+  const skin = col[f.skin || 's'];
+  const dy = (y) => y + (y < lift ? 1 : 0);
+  const ew = f.eyeW || 3, eh = f.eyeH || 3;
+  const eyes = pose.eyes || 'open';
+  f.eyes.forEach(([ex, ey0], i) => {
+    const ey = dy(ey0);
+    const inner = i === 0 ? ex + ew - 1 : ex;
+    const outer = i === 0 ? ex : ex + ew - 1;
+    if (eyes === 'closed' || eyes === 'happy') {
+      pb.rect(ex, ey, ew, eh, skin);
+      for (let k = 0; k < ew; k++) {
+        const edge = k === 0 || k === ew - 1;
+        pb.set(ex + k, eyes === 'closed' ? ey + eh - (edge ? 2 : 1) : ey + eh - (edge ? 1 : 2), line);
+      }
+    } else if (eyes === 'sad') {
+      pb.set(inner, ey - 2, line); pb.set(outer, ey - 1, line);
+    } else if (eyes === 'angry') {
+      pb.set(inner, ey - 1, line); pb.set(outer, ey - 2, line);
+    }
+  });
+  const mouth = pose.mouth || 'smile';
+  if (f.mouth && mouth !== 'smile') {
+    const [mx, my0] = f.mouth, my = dy(my0), mw = f.mouthW || 3;
+    pb.rect(mx, my, mw, 2, skin);
+    const mc = col[f.mouthColor || 'm'] || '#9c2f45';
+    if (mouth === 'open') { pb.rect(mx, my, mw, 2, mc); pb.rect(mx + 1, my + 1, Math.max(1, mw - 2), 1, '#ff8a9a'); }
+    else if (mouth === 'frown') { pb.rect(mx + 1, my, Math.max(1, mw - 2), 1, mc); pb.set(mx, my + 1, mc); pb.set(mx + mw - 1, my + 1, mc); }
+    else if (mouth === 'flat') pb.rect(mx, my, mw, 1, mc);
+  }
+  return pb;
+}
+
+// Pixel buffer for a species at a stage (hand-made when available, procedural otherwise).
+export function speciesSprite(sp, stage, variant = 'normal', pose = {}) {
+  const hand = handSprite(sp.id, stage);
+  return hand ? drawHand(hand, variant, pose) : drawChibi(sp, stage, variant, pose);
+}
+
+// ---------------------------------------------------------------------------
+// Cached sprite lookup
+// ---------------------------------------------------------------------------
+
 export function petSprite(pet, pose = {}, opts = {}) {
   const key = JSON.stringify([pet.stage, pet.family, pet.species, pet.variant, pose, opts.crack, opts.silhouette]);
   let cv = cache.get(key);
@@ -536,12 +629,21 @@ export function petSprite(pet, pose = {}, opts = {}) {
   let pb;
   if (pet.stage === 0) pb = drawEgg(pet.family, opts.crack || 0);
   else if (pet.stage === 1 || !pet.species) pb = drawWisp(pet.family, pose);
-  else pb = drawChibi(opts.sp, pet.stage, pet.variant, pose);
+  else pb = speciesSprite(opts.sp, pet.stage, pet.variant, pose);
   if (opts.silhouette) pb.fillAll(opts.silhouette);
   cv = pb.toCanvas();
   if (cache.size > 400) cache.clear();
   cache.set(key, cv);
   return cv;
+}
+
+// Draws a sprite canvas centered on x with its feet on groundY (sprites have one empty bottom row).
+export function blitSprite(ctx, cv, x, groundY, flip = false) {
+  const top = groundY - cv.height + 1, half = Math.floor(cv.width / 2);
+  ctx.save();
+  if (flip) { ctx.translate(Math.round(x), 0); ctx.scale(-1, 1); ctx.drawImage(cv, -half, top); }
+  else ctx.drawImage(cv, Math.round(x) - half, top);
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------

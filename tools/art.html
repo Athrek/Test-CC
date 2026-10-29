@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><title>Hand sprite preview</title>
+<body style="background:#e9e2ef;margin:0;font:12px sans-serif">
+<div id="out" style="display:flex;flex-wrap:wrap;gap:8px;padding:8px;align-items:flex-end"></div>
+<script type="module">
+// Preview a hand-made sprite line: tools/art.html?id=goblin&z=6
+import { SPECIES_BY_ID } from '../www/js/data.js';
+import { speciesSprite } from '../www/js/sprites.js';
+const q = new URLSearchParams(location.search), id = q.get('id') || 'goblin', z = +(q.get('z') || 6);
+const out = document.getElementById('out');
+const poses = (q.get('poses') || '1') === '1' ? [{}, { flap: 1 }, { eyes: 'closed' }, { eyes: 'happy', mouth: 'open' }, { eyes: 'sad', mouth: 'frown' }, { eyes: 'angry', mouth: 'flat' }] : [{}];
+const variants = (q.get('v') || 'normal').split(',');
+for (const v of variants) for (const st of [2, 3, 4]) for (const pose of (st === 4 || q.get('all') ? poses : [{}])) {
+  const cv = speciesSprite(SPECIES_BY_ID[id], st, v, pose).toCanvas();
+  cv.style.cssText = `width:${cv.width * z}px;image-rendering:pixelated;background:#fff8`;
+  out.appendChild(cv);
+}
+</script>
