@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ff8fb8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="description" content="MythPals: raise fantasy monster girls in a pocket virtual pet.">
+  <title>MythPals</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="top">
+      <div class="who">
+        <div id="petName" class="pet-name">MythPals</div>
+        <div id="petTitle" class="pet-title"></div>
+      </div>
+      <div class="pill" id="ageBox" title="Age">⏳ <span id="age">0m</span></div>
+      <div class="pill" title="Coins">🪙 <span id="coins">0</span></div>
+    </header>
+
+    <section class="bars" id="bars"></section>
+
+    <div class="device">
+      <div class="screen">
+        <canvas id="room" width="120" height="96"></canvas>
+        <div id="toast" class="toast"></div>
+      </div>
+    </div>
+
+    <nav class="actions" id="actions">
+      <button data-act="feed"><span>🍙</span>Feed</button>
+      <button data-act="play"><span>🎾</span>Play</button>
+      <button data-act="pet"><span>💗</span>Pet</button>
+      <button data-act="clean"><span>🧽</span>Clean</button>
+      <button data-act="heal"><span>💊</span>Heal</button>
+      <button data-act="lights"><span>💡</span>Lights</button>
+      <button data-act="train"><span>⚔️</span>Train</button>
+      <button data-act="scold"><span>❗</span>Scold</button>
+      <button data-act="status"><span>📋</span>Status</button>
+      <button data-act="shop"><span>🛒</span>Shop</button>
+      <button data-act="album"><span>🖼️</span>Album</button>
+      <button data-act="settings"><span>⚙️</span>Settings</button>
+    </nav>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="sheet">
+      <button class="close" id="modalClose" aria-label="Close">✕</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

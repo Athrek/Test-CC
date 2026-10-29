@@ -1,0 +1,8 @@
+{
+  "appId": "com.mythpals.vpet",
+  "appName": "MythPals",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#fff1f6"
+  }
+}

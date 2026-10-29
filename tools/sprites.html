@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><body style="background:#eee;margin:0">
+<canvas id="c"></canvas>
+<script type="module">
+import { SPECIES, FAMILIES } from '../www/js/data.js';
+import { drawChibi, drawEgg, drawWisp } from '../www/js/sprites.js';
+const S=3, cols=12;
+const items=[];
+for (const f of Object.keys(FAMILIES)) { items.push(drawEgg(f,1)); items.push(drawWisp(f)); }
+for (const sp of SPECIES) { items.push(drawChibi(sp,2,'normal')); items.push(drawChibi(sp,3,'normal',{arms:'up',eyes:'happy',mouth:'open'})); items.push(drawChibi(sp,4,'radiant')); items.push(drawChibi(sp,4,'shadow')); }
+const c=document.getElementById('c'); c.width=cols*48*S; c.height=Math.ceil(items.length/cols)*48*S;
+const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+items.forEach((pb,i)=>{ x.drawImage(pb.toCanvas(), (i%cols)*48*S, Math.floor(i/cols)*48*S, 48*S, 48*S); });
+document.title='done';
+</script>

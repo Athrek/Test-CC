@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0">
+<script type="module">
+import { SPECIES_BY_ID } from '../www/js/data.js';
+import { drawChibi } from '../www/js/sprites.js';
+window.makeIcon = (size, pad) => {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d');
+  const g = x.createLinearGradient(0, 0, size, size); g.addColorStop(0, '#ff9cc6'); g.addColorStop(1, '#b388ff');
+  x.fillStyle = g; x.fillRect(0, 0, size, size);
+  x.imageSmoothingEnabled = false;
+  const spr = drawChibi(SPECIES_BY_ID.cat, 3, 'normal', { eyes: 'happy', mouth: 'open', arms: 'up' }).toCanvas();
+  const s = Math.floor((size * (1 - pad * 2)) / 40);
+  x.drawImage(spr, 4, 6, 40, 40, (size - 40 * s) / 2, (size - 40 * s) / 2, 40 * s, 40 * s);
+  return c.toDataURL('image/png');
+};
+document.title = 'ready';
+</script>

@@ -1,0 +1,12 @@
+<!doctype html><meta charset="utf-8"><body style="background:#333;margin:0;display:flex;flex-wrap:wrap">
+<script type="module">
+import { SPECIES } from '../www/js/data.js';
+import { makeCG, makeWispCG } from '../www/js/cg.js';
+const q=new URLSearchParams(location.search);
+const ids=(q.get('ids')||'').split(',').filter(Boolean);
+const list=ids.length?SPECIES.filter(s=>ids.includes(s.id)):SPECIES;
+const stages=(q.get('st')||'2').split(',').map(Number);
+const vars=(q.get('v')||'normal').split(',');
+for(const sp of list) for(const st of stages) for(const v of vars){const d=document.createElement('div');d.innerHTML=makeCG(sp.id,st,v);d.firstChild.setAttribute('width',q.get('w')||300);d.firstChild.setAttribute('height',(q.get('w')||300)*1.4);document.body.appendChild(d);}
+if(q.get('wisp')){const d=document.createElement('div');d.innerHTML=makeWispCG('beast');d.firstChild.setAttribute('width',300);d.firstChild.setAttribute('height',420);document.body.appendChild(d);}
+</script>
